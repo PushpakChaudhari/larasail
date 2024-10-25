@@ -1,5 +1,3 @@
-#!/bin/bash
-
 #/
 #--------------------------------------------------------------------------
 # Larasail Project Creator
@@ -15,7 +13,7 @@
 shift
 
 if [ -z $1 ]; then
-    echo "Usage: larasail new <project-name> [--jet <livewire|inertia>] [--teams] [--www-alias]"
+    echo "Usage: larasail new <project-name> [--git] [--repo <repository-url>] [--jet <livewire|inertia>] [--teams] [--www-alias]"
     echo ""
     echo "${Cyan}Tip: you can use periods in project name to automatically create a host for it"
     exit
@@ -35,6 +33,8 @@ WAVE_PROJECT=false
 INSTALL_JET=false
 JET_WITH_TEAMS=false
 HOST_WITH_WWW_ALIAS=false
+GIT_INIT=false   # Added for git initialization
+REPO_URL=""      # Added to store the repository URL
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -57,12 +57,24 @@ while [ $# -gt 0 ]; do
         --teams)
             JET_WITH_TEAMS=true
             ;;
-	--wave)
+        --wave)
             WAVE_PROJECT=true
             LARAVEL_PROJECT=false
             ;;
         --www-alias)
             HOST_WITH_WWW_ALIAS=true
+            ;;
+        --git)                  # Added case for --git
+            GIT_INIT=true
+            ;;
+        --repo)                 # Added case for --repo
+            if [ $# -gt 1 ]; then
+                REPO_URL="$2"
+                shift
+            else
+                echo "${Red}ERROR${Color_Off}: --repo requires a repository URL"
+                exit 1
+            fi
             ;;
     esac
     shift
@@ -71,10 +83,21 @@ done
 if $WAVE_PROJECT; then
     bash /etc/.larasail/wave "$PROJECT_PATH"
 else
-    bash /etc/.larasail/laravel "$PROJECT_PATH"
+    if [ -n "$REPO_URL" ]; then             # Check if a repo URL is provided
+        echo "Cloning repository from $REPO_URL..."
+        git clone "$REPO_URL" "$PROJECT_PATH" # Clone the repository to the project path
+        cd "$PROJECT_PATH"
+    else
+        echo "Creating a new Laravel project..."
+        if [ "$GIT_INIT" = true ]; then        # Check if --git is set
+            laravel new "$PROJECT_PATH" --git  # Create project with Git initialization
+        else
+            laravel new "$PROJECT_PATH"         # Create project without Git initialization
+        fi
+    fi
 fi
 
-if [ -n $HOST ]; then
+if [ -n "$HOST" ]; then
     echo "Setting up host '$HOST'..."
     
     if $HOST_WITH_WWW_ALIAS; then
@@ -87,7 +110,7 @@ fi
 if $LARAVEL_PROJECT; then
     if $INSTALL_JET; then
         echo "Installing Laravel Jetstream with $JET_STACK..."
-        cd $PROJECT_PATH
+        cd "$PROJECT_PATH"
         composer require laravel/jetstream
         if $JET_WITH_TEAMS; then
             php artisan jetstream:install $JET_STACK --teams
